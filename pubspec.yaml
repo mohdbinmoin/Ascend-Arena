@@ -13,6 +13,7 @@ dependencies:
   flutter_riverpod: ^2.6.1
   flutter_secure_storage: ^9.2.2
   image_picker: ^1.2.3
+  path_provider: ^2.1.2
   pinput: ^6.0.2
   record: ^6.2.1
   supabase_flutter: ^2.17.1
