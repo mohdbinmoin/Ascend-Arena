@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ascend_arena/features/auth/profile_selection_screen.dart';
+import 'package:ascend_arena/features/auth/local_auth_service.dart';
 import 'package:ascend_arena/core/providers.dart';
 import 'package:ascend_arena/features/admin/admin_dashboard.dart';
 import 'package:ascend_arena/features/tasks/user_dashboard.dart';
@@ -17,8 +18,29 @@ void main() async {
   runApp(const ProviderScope(child: AscendArenaApp()));
 }
 
-class AscendArenaApp extends StatelessWidget {
+class AscendArenaApp extends ConsumerStatefulWidget {
   const AscendArenaApp({super.key});
+
+  @override
+  ConsumerState<AscendArenaApp> createState() => _AscendArenaAppState();
+}
+
+class _AscendArenaAppState extends ConsumerState<AscendArenaApp> {
+  @override
+  void initState() {
+    super.initState();
+    // Listen for refresh token rotations and update secure storage
+    final supabase = ref.read(supabaseProvider);
+    supabase.auth.onAuthStateChange.listen((data) {
+      final session = data.session;
+      if (session != null && session.refreshToken != null) {
+        ref.read(localAuthServiceProvider).updateRefreshToken(
+          session.user.id, 
+          session.refreshToken!
+        );
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
