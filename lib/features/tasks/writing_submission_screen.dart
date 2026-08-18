@@ -5,6 +5,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ascend_arena/core/providers.dart';
 import 'package:ascend_arena/features/tasks/user_dashboard.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:ascend_arena/core/offline_storage.dart';
+import 'package:ascend_arena/core/background_sync.dart';
 
 class WritingSubmissionScreen extends ConsumerStatefulWidget {
   final Map<String, dynamic> task;
@@ -48,6 +51,19 @@ class _WritingSubmissionScreenState extends ConsumerState<WritingSubmissionScree
     try {
       final supabase = ref.read(supabaseProvider);
       final user = supabase.auth.currentUser!;
+      
+      final connectivityResult = await (Connectivity().checkConnectivity());
+      if (connectivityResult.contains(ConnectivityResult.none)) {
+        // Offline - Queue for background upload
+        await OfflineStorage.addPendingUpload(user.id, widget.task['id'], _selectedImage!.path);
+        BackgroundSync.registerSyncTask();
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Offline: Task queued for background upload!')));
+          Navigator.pop(context);
+        }
+        return;
+      }
       
       // Upload to Storage
       final fileExt = _selectedImage!.path.split('.').last;

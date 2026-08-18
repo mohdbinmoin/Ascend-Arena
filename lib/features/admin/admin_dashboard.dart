@@ -6,6 +6,8 @@ import 'package:ascend_arena/features/admin/task_creation_screen.dart';
 import 'package:ascend_arena/features/admin/scoring_screen.dart';
 import 'package:ascend_arena/features/auth/profile_selection_screen.dart';
 import 'package:ascend_arena/features/admin/admin_users_screen.dart';
+import 'package:ascend_arena/features/admin/scoring_presets_screen.dart';
+import 'package:ascend_arena/features/admin/season_settings_screen.dart';
 
 final pendingSubmissionsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
   final supabase = ref.watch(supabaseProvider);
@@ -38,6 +40,20 @@ class AdminDashboard extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Admin Arena'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.date_range),
+            tooltip: 'Season Settings',
+            onPressed: () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const SeasonSettingsScreen()));
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.settings_suggest),
+            tooltip: 'Manage Presets',
+            onPressed: () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const ScoringPresetsScreen()));
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.people),
             onPressed: () {

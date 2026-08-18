@@ -12,7 +12,6 @@ class TaskCreationScreen extends ConsumerStatefulWidget {
 class _TaskCreationScreenState extends ConsumerState<TaskCreationScreen> {
   final _titleController = TextEditingController();
   final _instructionsController = TextEditingController();
-  final _graceController = TextEditingController(text: '300'); // Default 5 mins
   
   String? _selectedUserId;
   String? _selectedPresetId;
@@ -91,7 +90,6 @@ class _TaskCreationScreenState extends ConsumerState<TaskCreationScreen> {
         'assigned_user_id': _selectedUserId,
         'window_start': _windowStart?.toIso8601String(),
         'window_end': _windowEnd?.toIso8601String(),
-        'grace_seconds': int.tryParse(_graceController.text) ?? 30,
         'preset_id': _selectedPresetId,
       });
       
@@ -189,12 +187,6 @@ class _TaskCreationScreenState extends ConsumerState<TaskCreationScreen> {
             if (_windowStart != null || _windowEnd != null)
               TextButton(onPressed: () => setState(() { _windowStart = null; _windowEnd = null; }), child: const Text('Clear Times')),
               
-            const SizedBox(height: 16),
-            TextField(
-              controller: _graceController,
-              decoration: const InputDecoration(labelText: 'Grace Period (Seconds)', border: OutlineInputBorder()),
-              keyboardType: TextInputType.number,
-            ),
             const SizedBox(height: 32),
             ElevatedButton(
               onPressed: _isLoading ? null : _createTask,

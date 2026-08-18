@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ascend_arena/core/providers.dart';
+import 'package:ascend_arena/core/gamification.dart';
 
 final usersListProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
   final supabase = ref.watch(supabaseProvider);
@@ -87,6 +88,107 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
     );
   }
 
+  void _showXpDialog(String userId, String displayName) {
+    final amountController = TextEditingController();
+    final pinController = TextEditingController();
+    
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('Manage XP for $displayName'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: amountController,
+                decoration: const InputDecoration(labelText: 'Amount (-100 to 100)'),
+                keyboardType: const TextInputType.numberWithOptions(signed: true),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: pinController,
+                decoration: const InputDecoration(labelText: 'Admin PIN to confirm'),
+                keyboardType: TextInputType.number,
+                obscureText: true,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('CANCEL'),
+            ),
+            TextButton(
+              onPressed: () async {
+                final amount = int.tryParse(amountController.text.trim());
+                final pin = pinController.text.trim();
+                
+                if (amount == null || amount < -100 || amount > 100) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Amount must be between -100 and 100')));
+                  return;
+                }
+                
+                if (pin.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('PIN required')));
+                  return;
+                }
+
+                // Verify PIN
+                final localAuth = ref.read(localAuthServiceProvider);
+                final accounts = await localAuth.getSavedAccounts();
+                final currentUserId = ref.read(supabaseProvider).auth.currentUser!.id;
+                final adminAccount = accounts.firstWhere((a) => a['id'] == currentUserId, orElse: () => {});
+                
+                if (adminAccount.isEmpty || adminAccount['pin'] != pin) {
+                  if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invalid PIN')));
+                  return;
+                }
+
+                Navigator.pop(context); // Close dialog
+                _applyManualXp(userId, amount);
+              },
+              child: const Text('CONFIRM', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.amber)),
+            ),
+          ],
+        );
+      }
+    );
+  }
+
+  Future<void> _applyManualXp(String userId, int amount) async {
+    try {
+      final supabase = ref.read(supabaseProvider);
+      
+      // Get current XP
+      final userRecord = await supabase.from('users').select('xp').eq('id', userId).single();
+      final currentXp = (userRecord['xp'] as int?) ?? 0;
+      
+      final newXp = (currentXp + amount) < 0 ? 0 : (currentXp + amount);
+      final newLevel = Gamification.calculateLevel(newXp);
+
+      await supabase.from('users').update({
+        'xp': newXp,
+        'level': newLevel,
+      }).eq('id', userId);
+
+      await supabase.from('xp_transactions').insert({
+        'user_id': userId,
+        'amount': amount,
+        'reason': 'Manual adjustment by Admin',
+        'awarded_by': supabase.auth.currentUser!.id,
+      });
+
+      ref.invalidate(usersListProvider);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('XP ${amount > 0 ? "Added" : "Deducted"} Successfully!')));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final usersAsync = ref.watch(usersListProvider);
@@ -117,11 +219,28 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(user['display_name'], style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                          IconButton(
-                            icon: const Icon(Icons.emoji_events, color: Colors.amber),
-                            tooltip: 'Award Trophy',
-                            onPressed: () => _showAwardDialog(user['id'], user['display_name']),
+                          Row(
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.stars, color: Colors.amber),
+                                tooltip: 'Manage XP',
+                                onPressed: () => _showXpDialog(user['id'], user['display_name']),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.emoji_events, color: Colors.amber),
+                                tooltip: 'Award Trophy',
+                                onPressed: () => _showAwardDialog(user['id'], user['display_name']),
+                              ),
+                            ],
                           ),
+                        ],
+                      ),
+                      const Divider(),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Level ${user['level']} (${user['xp']} XP)'),
+                          Text(user['current_rank'] ?? 'Bronze 5', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.amber)),
                         ],
                       ),
                       const Divider(),

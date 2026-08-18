@@ -7,20 +7,34 @@ import 'package:ascend_arena/features/tasks/writing_submission_screen.dart';
 import 'package:ascend_arena/features/tasks/reading_submission_screen.dart';
 import 'package:ascend_arena/features/leaderboard/leaderboard_screen.dart';
 import 'package:ascend_arena/features/auth/profile_selection_screen.dart';
+import 'package:ascend_arena/features/tasks/user_profile_screen.dart';
 import 'package:ascend_arena/features/trophies/trophy_cabinet_screen.dart';
+
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:ascend_arena/core/offline_storage.dart';
 
 final activeTasksProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
   final supabase = ref.watch(supabaseProvider);
   final user = supabase.auth.currentUser;
   if (user == null) return [];
 
+  final connectivityResult = await (Connectivity().checkConnectivity());
+  if (connectivityResult.contains(ConnectivityResult.none)) {
+    // Offline, return cached
+    return OfflineStorage.getCachedTasks(user.id);
+  }
+
+  // Online, fetch and cache
   final response = await supabase
       .from('tasks')
       .select()
       .eq('assigned_user_id', user.id)
       .order('created_at', ascending: false);
 
-  return List<Map<String, dynamic>>.from(response);
+  final tasks = List<Map<String, dynamic>>.from(response);
+  await OfflineStorage.cacheTasks(user.id, tasks);
+  
+  return tasks;
 });
 
 class UserDashboard extends ConsumerWidget {
@@ -35,6 +49,23 @@ class UserDashboard extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('My Arena'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.sync),
+            tooltip: 'Sync Background Uploads',
+            onPressed: () {
+              // Trigger background sync task manually
+              import('package:ascend_arena/core/background_sync.dart').then((m) {
+                m.BackgroundSync.registerSyncTask();
+              });
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sync triggered!')));
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.person),
+            onPressed: () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const UserProfileScreen()));
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.emoji_events),
             color: Colors.amber,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:ascend_arena/core/providers.dart';
+import 'package:ascend_arena/core/gamification.dart';
 
 class ScoringScreen extends ConsumerStatefulWidget {
   final Map<String, dynamic> submission;
@@ -90,15 +91,41 @@ class _ScoringScreenState extends ConsumerState<ScoringScreen> {
     
     try {
       final supabase = ref.read(supabaseProvider);
+      final userId = widget.submission['users']['id'];
       
+      // 1. Insert Score
       await supabase.from('scores').insert({
         'submission_id': widget.submission['id'],
         'criteria_scores': inputtedScores,
         'total_score': totalScore,
       });
+
+      // 2. Calculate XP
+      final timingStatus = widget.submission['status'] as String;
+      final gainedXp = Gamification.calculateTaskXp(totalScore, _scale, timingStatus);
+
+      // 3. Fetch User current XP
+      final userRecord = await supabase.from('users').select('xp').eq('id', userId).single();
+      final currentXp = (userRecord['xp'] as int?) ?? 0;
+      final newXp = currentXp + gainedXp;
+      final newLevel = Gamification.calculateLevel(newXp);
+
+      // 4. Update User XP & Level
+      await supabase.from('users').update({
+        'xp': newXp,
+        'level': newLevel,
+      }).eq('id', userId);
+
+      // 5. Log XP Transaction
+      await supabase.from('xp_transactions').insert({
+        'user_id': userId,
+        'amount': gainedXp,
+        'reason': 'Scored task: ${widget.submission['tasks']['title']}',
+        'awarded_by': supabase.auth.currentUser!.id,
+      });
       
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Scores submitted successfully!')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Scores submitted! +$gainedXp XP awarded.')));
         Navigator.pop(context);
       }
     } catch (e) {

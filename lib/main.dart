@@ -6,9 +6,14 @@ import 'package:ascend_arena/features/auth/local_auth_service.dart';
 import 'package:ascend_arena/core/providers.dart';
 import 'package:ascend_arena/features/admin/admin_dashboard.dart';
 import 'package:ascend_arena/features/tasks/user_dashboard.dart';
+import 'package:ascend_arena/core/offline_storage.dart';
+import 'package:ascend_arena/core/background_sync.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await OfflineStorage.init();
+  await BackgroundSync.init();
 
   await Supabase.initialize(
     url: 'https://fdzrkzgdbgxlvojuhhyw.supabase.co',
